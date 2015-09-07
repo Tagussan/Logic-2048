@@ -1,17 +1,20 @@
 import Debug.SimpleReflect
+import Data.List
 
-data Val = Zero | NonZero deriving (Show)
-data RelKind = Eq | Diff deriving (Show)
+data Val = Zero | NonZero deriving (Eq, Show)
+
+data RelKind = Eq | Diff deriving (Eq, Show)
 type MovFunc = (Expr, Expr, Expr, Expr) -> (Expr, Expr, Expr, Expr)
 type Rel = (RelKind, (Int, Int))
 type Rels = [Rel]
 type Vals = [Val]
+type Logic = (Rels, Vals, MovFunc)
 
 shiftRel :: Rel -> Int -> Rel
 shiftRel (kind, (a, b)) offset = (kind, ((shift a), (shift b)))
   where shift x
-            | x >= offset = x + 1
-            | otherwise   = x
+          | x >= offset = x + 1
+          | otherwise   = x
 
 shiftVals :: Vals -> Int -> Vals
 shiftVals vals offset = (take offset vals) ++ [Zero] ++ (drop offset vals)
@@ -45,3 +48,15 @@ mergeAt p = \ (a, b, c, d) -> case p of
 
 valsFromInitRels :: Rels -> Vals
 valsFromInitRels rels = take (length rels + 1) $ repeat NonZero
+
+initLogics = map (\ rels -> (rels, valsFromInitRels rels, movFuncFromAdjRels rels)) initRels
+
+debugMovFunc :: MovFunc -> (Expr, Expr, Expr, Expr)
+debugMovFunc func = func (x, y, z, w)
+
+insertAt :: Int -> a -> [a] -> [a]
+insertAt pos elm trg = (take pos trg) ++ [elm] ++ (drop pos trg)
+
+paddedAll :: (Eq a) => a -> [a] -> [[a]]
+paddedAll elm trg = trg : nub [padded n ary | ary <- paddedAll elm trg, n <- [0 .. length trg]]
+  where padded n ary = insertAt n elm ary
