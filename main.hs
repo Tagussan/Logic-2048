@@ -138,8 +138,10 @@ prettyShowMovFunc func = (intercalate ";" assignStrs) ++ ";"
         mappings = zip ["a", "b", "c", "d"] ["x0", "x1", "x2", "x3"]
         replace old new = intercalate new . splitOn old
 
-prettyPrintLogic ((rels, vals), func) = mapM_ putStr ["(", conds, ",", prettyShowMovFunc func, ")\n"]
-  where conds = prettyShowVals vals ++ " && " ++ prettyShowRels rels
+prettyPrintLogic ((rels, vals), func) = mapM_ putStr [conds, ",", prettyShowMovFunc func, "\n"]
+  where conds
+          | prettyShowRels rels /= "" = prettyShowVals vals ++ " && " ++ prettyShowRels rels
+          | otherwise = prettyShowVals vals
 
 prettyPrintAllLogic = mapM_ prettyPrintLogic paddedLogics
 
