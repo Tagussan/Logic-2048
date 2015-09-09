@@ -33,6 +33,17 @@ relSeqs = map addRange relKindSeqs
 
 initRels = takeWhile ((>=) 3 . length) relSeqs
 
+initFuncFromVals :: Vals -> MovFunc
+initFuncFromVals vals = foldr assignZero id $ zip [0 .. length vals - 1] vals
+  where assignZero (ind, val) func
+          | val == Zero = (assignFunc ind) . func
+          | otherwise = func
+        assignFunc ind = \ (a, b, c, d) -> case ind of
+          0 -> (0, b, c, d)
+          1 -> (a, 0, c, d)
+          2 -> (a, b, 0, d)
+          3 -> (a, b, c, 0)
+
 movFuncFromAdjRels :: Rels -> MovFunc
 movFuncFromAdjRels rels = merge rels id
   where merge [] _ = id
@@ -53,13 +64,18 @@ shiftFuncAt p = \ (a, b, c, d) -> case p of
   0 -> (b, c, d, 0)
   1 -> (a, c, d, 0)
   2 -> (a, b, d, 0)
+  3 -> (a, b, c, d)
 
 
 valsFromInitRels :: Rels -> Vals
 valsFromInitRels rels = take (length rels + 1) $ repeat NonZero
 
 initVals = map valsFromInitRels initRels
-initLogics = map (\ rels -> ((rels, valsFromInitRels rels), movFuncFromAdjRels rels)) initRels
+
+initLogics = map mkLogic initRels
+  where mkLogic rels = ((rels, vals), movFunc)
+          where vals = valsFromInitRels rels
+                movFunc = (movFuncFromAdjRels rels)
 
 debugMovFunc :: MovFunc -> (Expr, Expr, Expr, Expr)
 debugMovFunc func = func (x, y, z, w)
@@ -78,7 +94,7 @@ pickSeq :: (a -> Bool) -> [a] -> [a]
 pickSeq f = takeWhile f . dropWhile (not . f)
 
 paddedValsSet :: Vals -> PaddedValsSet
-paddedValsSet vals = map (\ vals_ -> reverse ((dropWhile ((==) Zero) (reverse vals_)))) $ pickSeq (\ x -> ((==) 4 (length x))) $ paddedAll Zero vals
+paddedValsSet vals = pickSeq (\ x -> ((==) 4 (length x))) $ paddedAll Zero vals
 
 shiftRelsByPaddedVals :: PaddedVals -> Rels -> Rels
 shiftRelsByPaddedVals vals rels = foldr shift rels (reverse valsWithInd)
@@ -86,19 +102,22 @@ shiftRelsByPaddedVals vals rels = foldr shift rels (reverse valsWithInd)
         shift (val, ind) rels_ = if val == Zero then map (shiftRel ind) rels_ else rels_
 
 shiftFuncByPaddedVals :: PaddedVals -> MovFunc -> MovFunc
-shiftFuncByPaddedVals vals func = foldr shift func valsWithInd
+shiftFuncByPaddedVals vals func = func . (foldr shift id valsWithInd)
   where valsWithInd = zip vals [0 .. length vals - 1]
         shift (val, ind) func_ = if val == Zero then (shiftFuncAt ind) . func_ else func_
 
+padLogic :: Logic -> [Logic]
+padLogic ((rels, vals), func) = map mkLogic $ paddedValsSet vals
+  where mkLogic paddedVals = ((shiftRelsByPaddedVals paddedVals rels, paddedVals), (shiftFuncByPaddedVals paddedVals func) . (initFuncFromVals paddedVals))
+
 paddedLogics = concat $ map padLogic initLogics
-  where padLogic ((rels, vals), func) = map mkLogic $ paddedValsSet vals
-          where mkLogic paddedVals = ((shiftRelsByPaddedVals paddedVals rels, paddedVals), shiftFuncByPaddedVals paddedVals func)
+
 
 strLogic = show . debugLogic
 
 prettyShowRels :: Rels -> String
 prettyShowRels rels = intercalate " && " $ map prettyRel rels
-  where prettyRel (kind, (a, b)) = "x" ++ (show a) ++ " " ++ op ++ "  x" ++ (show b)
+  where prettyRel (kind, (a, b)) = "x" ++ (show a) ++ " " ++ op ++ " x" ++ (show b)
           where op = case kind of
                        Diff -> "!="
                        Eq -> "=="
