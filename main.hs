@@ -1,8 +1,9 @@
 import Debug.SimpleReflect
 import Data.List
+import Data.List.Split
+import Data.String
 
 data Val = Zero | NonZero deriving (Eq, Show)
-
 data RelKind = Eq | Diff deriving (Eq, Show)
 type MovFunc = (Expr, Expr, Expr, Expr) -> (Expr, Expr, Expr, Expr)
 type Rel = (RelKind, (Int, Int))
@@ -21,8 +22,6 @@ shiftRel offset (kind, (a, b)) = (kind, ((shift a), (shift b)))
 
 shiftVals :: Int -> Vals -> Vals
 shiftVals offset vals = (take offset vals) ++ [Zero] ++ (drop offset vals)
-
-type MergeLogic = (Vals, Rels, MovFunc)
 
 relKindSeqs :: [[RelKind]]
 relKindSeqs = [] : [p : x | x <- relKindSeqs, p <- [Diff, Eq]]
@@ -94,3 +93,35 @@ shiftFuncByPaddedVals vals func = foldr shift func valsWithInd
 paddedLogics = concat $ map padLogic initLogics
   where padLogic ((rels, vals), func) = map mkLogic $ paddedValsSet vals
           where mkLogic paddedVals = ((shiftRelsByPaddedVals paddedVals rels, paddedVals), shiftFuncByPaddedVals paddedVals func)
+
+strLogic = show . debugLogic
+
+prettyShowRels :: Rels -> String
+prettyShowRels rels = intercalate " && " $ map prettyRel rels
+  where prettyRel (kind, (a, b)) = "x" ++ (show a) ++ " " ++ op ++ "  x" ++ (show b)
+          where op = case kind of
+                       Diff -> "!="
+                       Eq -> "=="
+
+prettyShowVals :: Vals -> String
+prettyShowVals vals = intercalate " && " $ map prettyVal $ zip [0 .. length vals - 1] vals
+  where prettyVal (ind, kind) = "x" ++ (show ind) ++ " " ++ op ++ " 0"
+          where op = case kind of
+                       Zero -> "=="
+                       NonZero -> "!="
+
+prettyShowMovFunc :: MovFunc -> String
+prettyShowMovFunc func = (intercalate ";" assignStrs) ++ ";"
+  where assignStrs = zipWith assignStr [0 .. length varStrs - 1] varStrs
+        assignStr ind varStr = "y" ++ (show ind) ++ " <= " ++ varStr
+        varStrs = map replaceVar ((\ (a1, a2, a3, a4) -> map show [a1, a2, a3, a4]) (func (a, b, c, d)))
+        replaceVar str = foldr (\ (from, to) origStr -> replace from to origStr) str mappings
+        mappings = zip ["a", "b", "c", "d"] ["x0", "x1", "x2", "x3"]
+        replace old new = intercalate new . splitOn old
+
+prettyPrintLogic ((rels, vals), func) = mapM_ putStr ["(", conds, ",", prettyShowMovFunc func, ")\n"]
+  where conds = prettyShowVals vals ++ " && " ++ prettyShowRels rels
+
+prettyPrintAllLogic = mapM_ prettyPrintLogic paddedLogics
+
+main = prettyPrintAllLogic
