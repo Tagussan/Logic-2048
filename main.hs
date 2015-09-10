@@ -112,7 +112,6 @@ padLogic ((rels, vals), func) = map mkLogic $ paddedValsSet vals
 
 paddedLogics = concat $ map padLogic initLogics
 
-
 strLogic = show . debugLogic
 
 prettyShowRels :: Rels -> String
@@ -145,4 +144,22 @@ prettyPrintLogic ((rels, vals), func) = mapM_ putStr [conds, ",", prettyShowMovF
 
 prettyPrintAllLogic = mapM_ prettyPrintLogic paddedLogics
 
-main = prettyPrintAllLogic
+type LogicWithValidity = (Logic, Bool)
+logicWithValidity :: Logic -> LogicWithValidity
+logicWithValidity logic@((rels, vals), func)
+                     | valid vals func = (logic, True)
+                     | otherwise = (logic, False)
+                     where valid vals func = not $ all sameKind $ zip vals funcList
+                             where funcList = (\ (a1, a2, a3, a4) -> map show [a1, a2, a3 ,a4]) (func (x, y, z, w))
+                                   sameKind (val, var)
+                                     | val == Zero = if var == "0" then True else False
+                                     | val == NonZero = if var /= "0" then True else False
+
+prettyPrintLogicWithValidity (((rels, vals), func), validity) = mapM_ putStr [conds, ",", prettyShowMovFunc func, prettyShowValidity validity, "\n"]
+  where conds
+          | prettyShowRels rels /= "" = prettyShowVals vals ++ " && " ++ prettyShowRels rels
+          | otherwise = prettyShowVals vals
+        prettyShowValidity validity = if validity then "movable <= 1;" else "movable <= 0;"
+
+prettyPrintAllLogicWithValidity = mapM_ prettyPrintLogicWithValidity $ map logicWithValidity paddedLogics
+main = prettyPrintAllLogicWithValidity
