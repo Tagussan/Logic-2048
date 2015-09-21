@@ -72,7 +72,7 @@ valsFromInitRels rels = take (length rels + 1) $ repeat NonZero
 
 initVals = map valsFromInitRels initRels
 
-initLogics = map mkLogic initRels
+initLogics = (([],[]), id) : map mkLogic initRels
   where mkLogic rels = ((rels, vals), movFunc)
           where vals = valsFromInitRels rels
                 movFunc = (movFuncFromAdjRels rels)
