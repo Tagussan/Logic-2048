@@ -4,6 +4,7 @@ import Data.List.Split
 import Data.String
 import Text.Regex
 import Text.Regex.Posix
+import Control.Lens
 
 data Val = Zero | NonZero deriving (Eq, Show)
 data RelKind = Eq | Diff deriving (Eq, Show)
@@ -166,6 +167,7 @@ prettyPrintLogicWithValidity (((rels, vals), func), validity) = mapM_ putStr [co
 prettyPrintAllLogicWithValidity = mapM_ prettyPrintLogicWithValidity $ map logicWithValidity paddedLogics
 -- main = prettyPrintAllLogicWithValidity
 
+relsToBits :: Rels -> String
 relsToBits rels = foldr relToBit "xxxxxx" rels
   where relToBit (k, rng) str = replaceBitAt (rngToPos rng)
           where replaceBitAt i = replaceN str i (kindBit k)
@@ -180,12 +182,14 @@ relsToBits rels = foldr relToBit "xxxxxx" rels
         kindBit Diff = "1"
         replaceN xs n new = take n xs ++ new ++ drop (n + 1) xs
 
+showBinLen2 :: Int -> String
 showBinLen2 i = case i of
                   0 -> "00"
                   1 -> "01"
                   2 -> "10"
                   3 -> "11"
 
+movFuncToBits :: MovFunc -> String
 movFuncToBits func = concat $ map packToBit varStrs
   where varStrs = map replaceVar ((\ (a1, a2, a3, a4) -> map show [a1, a2, a3, a4]) (func (a, b, c, d)))
         replaceVar str = foldr (\ (from, to) origStr -> replace from to origStr) str mappings
@@ -197,6 +201,7 @@ movFuncToBits func = concat $ map packToBit varStrs
                 isAdd = if (parts !! 3) == "" then "0" else "1"
                 isZero = if (parts !! 1) == "x" then "0" else "1"
 
+genPossibleBits :: String -> [String]
 genPossibleBits bits = if elem 'x' bits
                           then let left = takeWhile ((/=) 'x') bits
                                    right = tail $ dropWhile ((/=) 'x') bits
@@ -204,3 +209,23 @@ genPossibleBits bits = if elem 'x' bits
                                   concatMap genPossibleBits [left ++ [p] ++ right | p <- "01"]
                           else [bits]
 
+valsToBits :: Vals -> String
+valsToBits vals = concatMap (\ x -> if x == Zero then "0" else "1") vals
+
+logicToRamMap :: Logic -> (String, String)
+logicToRamMap ((rels, vals), func) = (condsBits, funcBits)
+  where condsBits = (valsToBits vals) ++ (relsToBits rels)
+        funcBits = movFuncToBits func
+
+logicWithValidityToRamMap :: (Logic, Bool) -> (String, String)
+logicWithValidityToRamMap (logic, validity) = (condsBits, funcBits ++ validBit)
+  where logicRamMap = logicToRamMap logic
+        validBit = if validity then "1" else "0"
+        condsBits = view _1 logicRamMap
+        funcBits = view _2 logicRamMap
+
+inflateRamMap (addr, content) = zip (genPossibleBits addr) (repeat content)
+
+allRamMap = concatMap inflateRamMap $ map (logicWithValidityToRamMap . logicWithValidity) paddedLogics
+
+main = mapM_ print allRamMap
