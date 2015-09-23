@@ -196,3 +196,11 @@ movFuncToBits func = concat $ map packToBit varStrs
                 varFrom = (showBinLen2 . read) (parts !! 2)
                 isAdd = if (parts !! 3) == "" then "0" else "1"
                 isZero = if (parts !! 1) == "x" then "0" else "1"
+
+genPossibleBits bits = if elem 'x' bits
+                          then let left = takeWhile ((/=) 'x') bits
+                                   right = tail $ dropWhile ((/=) 'x') bits
+                                in
+                                  concatMap genPossibleBits [left ++ [p] ++ right | p <- "01"]
+                          else [bits]
+
