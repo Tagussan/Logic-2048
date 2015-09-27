@@ -20,7 +20,7 @@ type Logic = (InitCond, MovFunc)
 shiftRel :: Int -> Rel -> Rel
 shiftRel offset (kind, (a, b)) = (kind, ((shift a), (shift b)))
   where shift x
-          | x >= offset = x + 1
+          | x <= offset = x - 1
           | otherwise   = x
 
 shiftVals :: Int -> Vals -> Vals
@@ -34,7 +34,8 @@ relSeqs = map addRange relKindSeqs
   where addRange x = zipWith putRange [0 .. length x - 1] x
         putRange n x = (x, (n, n + 1))
 
-initRels = takeWhile ((>=) 3 . length) relSeqs
+initRels = map (reverse . map invRng) $ takeWhile ((>=) 3 . length) relSeqs
+  where invRng (k, (a, b)) = (k, (3 - b, 3 - a))
 
 initFuncFromVals :: Vals -> MovFunc
 initFuncFromVals vals = foldr assignZero id $ zip [0 .. length vals - 1] vals
@@ -48,26 +49,26 @@ initFuncFromVals vals = foldr assignZero id $ zip [0 .. length vals - 1] vals
           3 -> (a, b, c, 0)
 
 movFuncFromAdjRels :: Rels -> MovFunc
-movFuncFromAdjRels rels = merge rels id
+movFuncFromAdjRels rels = merge (reverse rels) id
   where merge [] _ = id
         merge ((Diff, _):[]) f = merge [] f . id
-        merge ((Eq, (a, _)):[]) f = merge [] f . mergeFuncAt a
+        merge ((Eq, (_, a)):[]) f = merge [] f . mergeFuncAt a
         merge ((Diff, _):y:ys) f = merge (y:ys) f . id
-        merge ((Eq, (a, _)):(_, rng):ys) f = merge (map shiftRng ((Diff, rng):ys)) f . mergeFuncAt a
-        shiftRng (k, (a, b)) = (k, (a - 1, b - 1))
+        merge ((Eq, (_, a)):(_, rng):ys) f = merge (map shiftRng ((Diff, rng):ys)) f . mergeFuncAt a
+        shiftRng (k, (a, b)) = (k, (a + 1, b + 1))
 
 mergeFuncAt :: Int -> MovFunc
 mergeFuncAt p = \ (a, b, c, d) -> case p of
-  0 -> (a + 1, c, d, 0)
-  1 -> (a, b + 1, d, 0)
-  2 -> (a, b, c + 1, 0)
+  1 -> (0, b + 1, c, d)
+  2 -> (0, a, c + 1, d)
+  3 -> (0, a, b, d + 1)
 
 shiftFuncAt :: Int -> MovFunc
 shiftFuncAt p = \ (a, b, c, d) -> case p of
-  0 -> (b, c, d, 0)
-  1 -> (a, c, d, 0)
-  2 -> (a, b, d, 0)
-  3 -> (a, b, c, d)
+  0 -> (a, b, c, d)
+  1 -> (0, a, c, d)
+  2 -> (0, a, b, d)
+  3 -> (0, a, b, c)
 
 
 valsFromInitRels :: Rels -> Vals
@@ -100,12 +101,12 @@ paddedValsSet :: Vals -> PaddedValsSet
 paddedValsSet vals = pickSeq (\ x -> ((==) 4 (length x))) $ paddedAll Zero vals
 
 shiftRelsByPaddedVals :: PaddedVals -> Rels -> Rels
-shiftRelsByPaddedVals vals rels = foldr shift rels (reverse valsWithInd)
+shiftRelsByPaddedVals vals rels = foldr shift rels valsWithInd
   where valsWithInd = zip vals [0 .. length vals - 1]
         shift (val, ind) rels_ = if val == Zero then map (shiftRel ind) rels_ else rels_
 
 shiftFuncByPaddedVals :: PaddedVals -> MovFunc -> MovFunc
-shiftFuncByPaddedVals vals func = func . (foldr shift id valsWithInd)
+shiftFuncByPaddedVals vals func = func . (foldr shift id (reverse valsWithInd))
   where valsWithInd = zip vals [0 .. length vals - 1]
         shift (val, ind) func_ = if val == Zero then (shiftFuncAt ind) . func_ else func_
 
@@ -165,7 +166,7 @@ prettyPrintLogicWithValidity (((rels, vals), func), validity) = mapM_ putStr [co
         prettyShowValidity validity = if validity then "movable <= 1;" else "movable <= 0;"
 
 prettyPrintAllLogicWithValidity = mapM_ prettyPrintLogicWithValidity $ map logicWithValidity paddedLogics
--- main = prettyPrintAllLogicWithValidity
+main = prettyPrintAllLogicWithValidity
 
 relsToBits :: Rels -> String
 relsToBits rels = foldr relToBit "xxxxxx" rels
@@ -228,4 +229,4 @@ inflateRamMap (addr, content) = zip (genPossibleBits addr) (repeat content)
 
 allRamMap = concatMap inflateRamMap $ map (logicWithValidityToRamMap . logicWithValidity) paddedLogics
 
-main = mapM_ print allRamMap
+-- main = mapM_ print allRamMap
